@@ -7,12 +7,27 @@ trigger:
       - dev
       - uat
 
+pr:
+  branches:
+    include:
+      - main
+      - stage
+      - qa
+      - dev
+      - uat
+
 variables:
   vmImageName: 'ubuntu-latest'
   azureServiceConnection: 'Subscription'
   terraformVersion: '1.10.5'
   # Update this if your .tf files are in a subfolder (e.g., '$(System.DefaultWorkingDirectory)/terraform')
   workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+  # Determine target branch name whether triggered by a PR or a direct push/merge
+  ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+    targetBranch: $[ replace(variables['System.PullRequest.TargetBranch'], 'refs/heads/', '') ]
+  ${{ else }}:
+    targetBranch: $(Build.SourceBranchName)
 
   ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
     envName: 'prod'
@@ -24,8 +39,17 @@ variables:
     envName: 'dev'
   ${{ if eq(variables['Build.SourceBranchName'], 'uat') }}:
     envName: 'uat'
-  ${{ if not(in(variables['Build.SourceBranchName'], 'main', 'stage', 'qa', 'dev', 'uat')) }}:
+  # Handle Pull Request target branches (since SourceBranchName is 'merge' during PRs)
+  ${{ if eq(variables['System.PullRequest.TargetBranch'], 'refs/heads/main') }}:
+    envName: 'prod'
+  ${{ if eq(variables['System.PullRequest.TargetBranch'], 'refs/heads/stage') }}:
+    envName: 'stage'
+  ${{ if eq(variables['System.PullRequest.TargetBranch'], 'refs/heads/qa') }}:
+    envName: 'qa'
+  ${{ if eq(variables['System.PullRequest.TargetBranch'], 'refs/heads/dev') }}:
     envName: 'dev'
+  ${{ if eq(variables['System.PullRequest.TargetBranch'], 'refs/heads/uat') }}:
+    envName: 'uat'
 
 pool:
   vmImage: $(vmImageName)
@@ -66,7 +90,8 @@ stages:
 - stage: Approval
   displayName: Approve Apply - $(envName)
   dependsOn: Plan
-  condition: succeeded()
+  # Skip Approval and Apply on Pull Requests; only run after merge/push
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
   - job: Manual_Approval
     displayName: 'Approve Terraform Apply ($(envName))'
@@ -83,7 +108,7 @@ stages:
 - stage: Apply
   displayName: Apply - $(envName)
   dependsOn: Approval
-  condition: succeeded()
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
   - deployment: Terraform_Apply
     environment: '$(envName)'
