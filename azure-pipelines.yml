@@ -100,5 +100,5 @@ stages:
               provider: 'azurerm'
               command: 'apply'
               workingDirectory: '$(workingDirectory)'
-              commandOptions: '-var-file=environments/$(envName)/terraform.tfvars'
+              commandOptions: '-var-file=environments/$(envName)/$(envName).tfvars'
               environmentServiceNameAzureRM: 'Azure subscription 1(525c7c1f-f5e9-4bf4-8d7a-5b7a06889a12)'
