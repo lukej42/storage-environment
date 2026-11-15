@@ -7,18 +7,6 @@ trigger:
       - dev
       - uat
 
-parameters:
-  - name: environment
-    displayName: 'Target Environment (for non-standard branches)'
-    type: string
-    default: 'dev'
-    values:
-      - dev
-      - qa
-      - uat
-      - stage
-      - prod
-
 variables:
   vmImageName: 'ubuntu-latest'
   azureServiceConnection: 'Subscription'
@@ -37,7 +25,7 @@ variables:
   ${{ if eq(variables['Build.SourceBranchName'], 'uat') }}:
     envName: 'uat'
   ${{ if not(in(variables['Build.SourceBranchName'], 'main', 'stage', 'qa', 'dev', 'uat')) }}:
-    envName: ${{ parameters.environment }}
+    envName: 'dev'
 
 pool:
   vmImage: $(vmImageName)
