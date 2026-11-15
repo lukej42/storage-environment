@@ -5,11 +5,27 @@ trigger:
       - stage
       - qa
       - dev
+      - uat
+
+parameters:
+  - name: environment
+    displayName: 'Target Environment (for non-standard branches)'
+    type: string
+    default: 'dev'
+    values:
+      - dev
+      - qa
+      - uat
+      - stage
+      - prod
 
 variables:
   vmImageName: 'ubuntu-latest'
   azureServiceConnection: 'Subscription'
-  
+  terraformVersion: '1.10.5'
+  # Update this if your .tf files are in a subfolder (e.g., '$(System.DefaultWorkingDirectory)/terraform')
+  workingDirectory: '$(System.DefaultWorkingDirectory)'
+
   ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
     envName: 'prod'
   ${{ if eq(variables['Build.SourceBranchName'], 'stage') }}:
@@ -18,7 +34,7 @@ variables:
     envName: 'qa'
   ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
     envName: 'dev'
-  ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
+  ${{ if eq(variables['Build.SourceBranchName'], 'uat') }}:
     envName: 'uat'
   ${{ if not(in(variables['Build.SourceBranchName'], 'main', 'stage', 'qa', 'dev', 'uat')) }}:
     envName: ${{ parameters.environment }}
@@ -33,8 +49,9 @@ stages:
   - job: Terraform_Plan
     steps:
     - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
       inputs:
-        terraformVersion: 'latest'
+        terraformVersion: '$(terraformVersion)'
 
     - task: TerraformTask@5
       displayName: 'Init'
@@ -70,10 +87,11 @@ stages:
         deploy:
           steps:
           - checkout: self
-          
+
           - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
             inputs:
-              terraformVersion: 'latest'
+              terraformVersion: '$(terraformVersion)'
 
           - task: TerraformTask@5
             displayName: 'Init'
@@ -87,7 +105,7 @@ stages:
               backendAzureRmContainerName: 'storage-environment'
               backendAzureRmKey: '$(envName).terraform.tfstate'
               backendAzureRmUseAzureAd: true
-          
+
           - task: TerraformTask@5
             displayName: 'Apply'
             inputs:
