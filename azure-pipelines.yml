@@ -41,27 +41,32 @@ stages:
       inputs:
         terraformVersion: '$(terraformVersion)'
 
-    - task: TerraformTask@5
-      displayName: 'Init'
+    - task: AzureCLI@2
+      displayName: 'Terraform Init & Plan'
       inputs:
-        provider: 'azurerm'
-        command: 'init'
+        azureSubscription: $(azureServiceConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
         workingDirectory: '$(workingDirectory)'
-        backendServiceArm: $(azureServiceConnection)
-        backendAzureRmResourceGroupName: 'terraform-deploy'
-        backendAzureRmStorageAccountName: 'terraformsflg'
-        backendAzureRmContainerName: 'storage-environment'
-        backendAzureRmKey: '$(envName).terraform.tfstate'
-        backendAzureRmUseAzureAd: true
+        inlineScript: |
+          set -e
+          SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
-    - task: TerraformTask@5
-      displayName: 'Plan'
-      inputs:
-        provider: 'azurerm'
-        command: 'plan'
-        workingDirectory: '$(workingDirectory)'
-        commandOptions: '-var-file=environments/$(envName)/terraform.tfvars'
-        environmentServiceNameAzureRM: $(azureServiceConnection)
+          terraform init \
+            -backend-config="storage_account_name=terraformsflg" \
+            -backend-config="container_name=storage-environment" \
+            -backend-config="key=$(envName).terraform.tfstate" \
+            -backend-config="resource_group_name=terraform-deploy" \
+            -backend-config="subscription_id=$SUBSCRIPTION_ID" \
+            -backend-config="use_azuread_auth=true"
+
+          terraform plan \
+            -var-file="environments/$(envName)/terraform.tfvars" \
+            -out=tfplan
+
+    - publish: '$(workingDirectory)/tfplan'
+      artifact: 'tfplan-$(envName)'
+      displayName: 'Publish Terraform Plan'
 
 - stage: Apply
   displayName: Apply - $(envName)
@@ -76,29 +81,32 @@ stages:
           steps:
           - checkout: self
 
+          - download: current
+            artifact: 'tfplan-$(envName)'
+            displayName: 'Download Terraform Plan'
+
           - task: TerraformInstaller@1
             displayName: 'Install Terraform'
             inputs:
               terraformVersion: '$(terraformVersion)'
 
-          - task: TerraformTask@5
-            displayName: 'Init'
+          - task: AzureCLI@2
+            displayName: 'Terraform Init & Apply'
             inputs:
-              provider: 'azurerm'
-              command: 'init'
+              azureSubscription: $(azureServiceConnection)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
               workingDirectory: '$(workingDirectory)'
-              backendServiceArm: $(azureServiceConnection)
-              backendAzureRmResourceGroupName: 'terraform-deploy'
-              backendAzureRmStorageAccountName: 'terraformsflg'
-              backendAzureRmContainerName: 'storage-environment'
-              backendAzureRmKey: '$(envName).terraform.tfstate'
-              backendAzureRmUseAzureAd: true
+              inlineScript: |
+                set -e
+                SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
-          - task: TerraformTask@5
-            displayName: 'Apply'
-            inputs:
-              provider: 'azurerm'
-              command: 'apply'
-              workingDirectory: '$(workingDirectory)'
-              commandOptions: '-var-file=environments/$(envName)/terraform.tfvars'
-              environmentServiceNameAzureRM: $(azureServiceConnection)
+                terraform init \
+                  -backend-config="storage_account_name=terraformsflg" \
+                  -backend-config="container_name=storage-environment" \
+                  -backend-config="key=$(envName).terraform.tfstate" \
+                  -backend-config="resource_group_name=terraform-deploy" \
+                  -backend-config="subscription_id=$SUBSCRIPTION_ID" \
+                  -backend-config="use_azuread_auth=true"
+
+                terraform apply -auto-approve "$(Pipeline.Workspace)/tfplan-$(envName)/tfplan"
