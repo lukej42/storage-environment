@@ -42,18 +42,22 @@ stages:
         terraformVersion: '$(terraformVersion)'
 
     - task: AzureCLI@2
-      displayName: 'Login to Azure CLI'
+      displayName: 'Set Terraform Auth Variables'
       inputs:
         azureSubscription: $(azureServiceConnection)
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         addSpnToEnvironment: true
         inlineScript: |
-          unset AZURE_CONFIG_DIR
+          SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+          echo "##vso[task.setvariable variable=ARM_CLIENT_ID]$servicePrincipalId"
+          echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
+          echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$SUBSCRIPTION_ID"
           if [ -n "$idToken" ]; then
-            az login --service-principal -u "$servicePrincipalId" --tenant "$tenantId" --federated-token "$idToken"
+            echo "##vso[task.setvariable variable=ARM_OIDC_TOKEN;issecret=true]$idToken"
+            echo "##vso[task.setvariable variable=ARM_USE_OIDC]true"
           else
-            az login --service-principal -u "$servicePrincipalId" -p "$servicePrincipalKey" --tenant "$tenantId"
+            echo "##vso[task.setvariable variable=ARM_CLIENT_SECRET;issecret=true]$servicePrincipalKey"
           fi
 
     - task: TerraformTask@5
@@ -97,18 +101,22 @@ stages:
               terraformVersion: '$(terraformVersion)'
 
           - task: AzureCLI@2
-            displayName: 'Login to Azure CLI'
+            displayName: 'Set Terraform Auth Variables'
             inputs:
               azureSubscription: $(azureServiceConnection)
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               addSpnToEnvironment: true
               inlineScript: |
-                unset AZURE_CONFIG_DIR
+                SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                echo "##vso[task.setvariable variable=ARM_CLIENT_ID]$servicePrincipalId"
+                echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
+                echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$SUBSCRIPTION_ID"
                 if [ -n "$idToken" ]; then
-                  az login --service-principal -u "$servicePrincipalId" --tenant "$tenantId" --federated-token "$idToken"
+                  echo "##vso[task.setvariable variable=ARM_OIDC_TOKEN;issecret=true]$idToken"
+                  echo "##vso[task.setvariable variable=ARM_USE_OIDC]true"
                 else
-                  az login --service-principal -u "$servicePrincipalId" -p "$servicePrincipalKey" --tenant "$tenantId"
+                  echo "##vso[task.setvariable variable=ARM_CLIENT_SECRET;issecret=true]$servicePrincipalKey"
                 fi
 
           - task: TerraformTask@5
