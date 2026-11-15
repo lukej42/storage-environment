@@ -43,11 +43,13 @@ stages:
 
     - task: TerraformTask@5
       displayName: 'Init'
+      env:
+        ARM_USE_AZUREAD: 'true'
       inputs:
         provider: 'azurerm'
         command: 'init'
         workingDirectory: '$(workingDirectory)'
-        backendServiceArm: 'Subscription'
+        backendServiceArm: $(azureServiceConnection)
         backendAzureRmResourceGroupName: 'terraform-deploy'
         backendAzureRmStorageAccountName: 'terraformsflg'
         backendAzureRmContainerName: 'storage-environment'
