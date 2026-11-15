@@ -41,10 +41,23 @@ stages:
       inputs:
         terraformVersion: '$(terraformVersion)'
 
+    - task: AzureCLI@2
+      displayName: 'Login to Azure CLI'
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        addSpnToEnvironment: true
+        inlineScript: |
+          unset AZURE_CONFIG_DIR
+          if [ -n "$idToken" ]; then
+            az login --service-principal -u "$servicePrincipalId" --tenant "$tenantId" --federated-token "$idToken"
+          else
+            az login --service-principal -u "$servicePrincipalId" -p "$servicePrincipalKey" --tenant "$tenantId"
+          fi
+
     - task: TerraformTask@5
       displayName: 'Init'
-      env:
-        ARM_USE_AZUREAD: 'true'
       inputs:
         provider: 'azurerm'
         command: 'init'
@@ -54,6 +67,7 @@ stages:
         backendAzureRmStorageAccountName: 'terraformsflg'
         backendAzureRmContainerName: 'storage-environment'
         backendAzureRmKey: '$(envName).terraform.tfstate'
+        backendAzureRmUseAzureAd: true
 
     - task: TerraformTask@5
       displayName: 'Plan'
@@ -62,7 +76,7 @@ stages:
         command: 'plan'
         workingDirectory: '$(workingDirectory)'
         commandOptions: '-var-file=environments/$(envName)/terraform.tfvars'
-        environmentServiceNameAzureRM: 'Subscription'
+        environmentServiceNameAzureRM: $(azureServiceConnection)
 
 - stage: Apply
   displayName: Apply - $(envName)
@@ -82,17 +96,33 @@ stages:
             inputs:
               terraformVersion: '$(terraformVersion)'
 
+          - task: AzureCLI@2
+            displayName: 'Login to Azure CLI'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              addSpnToEnvironment: true
+              inlineScript: |
+                unset AZURE_CONFIG_DIR
+                if [ -n "$idToken" ]; then
+                  az login --service-principal -u "$servicePrincipalId" --tenant "$tenantId" --federated-token "$idToken"
+                else
+                  az login --service-principal -u "$servicePrincipalId" -p "$servicePrincipalKey" --tenant "$tenantId"
+                fi
+
           - task: TerraformTask@5
             displayName: 'Init'
             inputs:
               provider: 'azurerm'
               command: 'init'
               workingDirectory: '$(workingDirectory)'
-              backendServiceArm: 'Subscription'
+              backendServiceArm: $(azureServiceConnection)
               backendAzureRmResourceGroupName: 'terraform-deploy'
               backendAzureRmStorageAccountName: 'terraformsflg'
               backendAzureRmContainerName: 'storage-environment'
               backendAzureRmKey: '$(envName).terraform.tfstate'
+              backendAzureRmUseAzureAd: true
 
           - task: TerraformTask@5
             displayName: 'Apply'
@@ -101,4 +131,4 @@ stages:
               command: 'apply'
               workingDirectory: '$(workingDirectory)'
               commandOptions: '-var-file=environments/$(envName)/terraform.tfvars'
-              environmentServiceNameAzureRM: 'Subscription'
+              environmentServiceNameAzureRM: $(azureServiceConnection)
